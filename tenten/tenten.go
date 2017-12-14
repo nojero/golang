@@ -126,7 +126,7 @@ func execute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	if id < len(computers) {
 		comp := &computers[id]
 		ret, err := comp.Execute()
-		if err != nil {
+		if err == nil {
 			fmt.Fprintf(w, ret)
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

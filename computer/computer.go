@@ -55,7 +55,7 @@ func (c *Computer) Execute() (string, error) {
 			c.sp += 1
 			c.pc += 1
 		case "PRINT":
-			ret = fmt.Sprintf("%s\n%s", ret, c.stack[c.sp-1].arg)
+			ret = fmt.Sprintf("%s%d\n", ret, c.stack[c.sp-1].arg)
 			c.sp -= 1
 			c.pc += 1
 		case "STOP":
