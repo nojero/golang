@@ -1,56 +1,147 @@
 package main
 
 import (
-	//"github.com/nojero/computer"
-	"fmt";
-	"encoding/json";
-    "io/ioutil";
+	"encoding/json"
+	"fmt"
+	"github.com/julienschmidt/httprouter"
+	"github.com/nojero/computer"
+	"io/ioutil"
 	"net/http"
+	"log"
+	"strconv"
 )
 
-func main() {
-	http.HandleFunc("/v1/computers", func(w http.ResponseWriter, r *http.Request) {
-		body, err := ioutil.ReadAll(r.Body)
+// App variables
+var computer_count = 0
+var computers []computer.Computer
 
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+func parseBody(r *http.Request, t interface{}) error {
+	body, err := ioutil.ReadAll(r.Body)
 
-        defer r.Body.Close()
+	if err != nil {
+		return err
+	}
 
-        type Args struct {
-            Stack int `json:"stack"`
-        }
+	json.Unmarshal([]byte(body), t)
 
-        var args Args
-        err = json.Unmarshal([]byte(body), &args)
+    return nil
+}
+func createComputer(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	type Args struct {
+		Stack int `json:"stack"`
+	}
+	var args Args
+
+    err := parseBody(r, &args)
+    if err != nil{
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    defer r.Body.Close()
+
+	size := args.Stack
+	if size <= 0 {
+		http.Error(w, "Error: stack value invalid or not present", http.StatusInternalServerError)
+		return
+	}
+
+	comp := computer.New(100)
+	computers = append(computers, comp)
+	fmt.Fprintf(w, "%d\n", computer_count)
+	computer_count += 1
+}
+
+func setAddress(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+    strId := ps.ByName("id")
+
+    id, err := strconv.Atoi(strId)
+    if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // valid id
+	type Args struct {
+		Addr int `json:"addr"`
+	}
+	var args Args
+
+    err = parseBody(r, &args)
+    if err != nil{
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    defer r.Body.Close()
+    if id < len(computers) {
+        comp := &computers[id]
+        comp.SetAddress(args.Addr)
+    } else {
+		http.Error(w, "Computer not existant", http.StatusInternalServerError)
+    }
+}
+
+func insert(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+    strId := ps.ByName("id")
+    ins := ps.ByName("type")
+
+    id, err := strconv.Atoi(strId)
+    if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // valid id
+	type Args struct {
+		Arg int `json:"arg"`
+	}
+	var args Args
+
+    err = parseBody(r, &args)
+    if err != nil{
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    defer r.Body.Close()
+
+    if id < len(computers) {
+        comp := &computers[id]
+        comp.Insert(ins, args.Arg)
+    } else {
+		http.Error(w, "Computer not existant", http.StatusInternalServerError)
+    }
+}
+
+func execute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+    strId := ps.ByName("id")
+
+    id, err := strconv.Atoi(strId)
+    if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    if id < len(computers) {
+        comp := &computers[id]
+        ret, err := comp.Execute()
         if err != nil {
-            fmt.Println("error:", err)
+	        fmt.Fprintf(w, ret)
+        } else {
+		    http.Error(w, err.Error(), http.StatusInternalServerError)
         }
-        size := args.Stack
-        if size <= 0 {
-            http.Error(w, "Error: stack value invalid or not present", http.StatusInternalServerError)
-        }
-	})
+    } else {
+		http.Error(w, "Computer not existant", http.StatusInternalServerError)
+    }
+}
 
-	http.ListenAndServe(":8080", nil)
+func main() {
+	router := httprouter.New()
+	router.POST("/v1/computers", createComputer)
+    router.PATCH("/v1/computers/:id/stack/pointer", setAddress)
+    router.POST("/v1/computers/:id/stack/insert/:type", insert)
+    router.POST("/v1/computers/:id/exec", execute)
 
-	/*
-	   comp := computer.New(100)
-	   comp.SetAddress(50)
-	   comp.Insert("MULT", 0)
-	   comp.Insert("PRINT", 0)
-	   comp.Insert("RET", 0)
-	   comp.SetAddress(0)
-	   comp.Insert("PUSH", 1009)
-	   comp.Insert("PRINT", 0)
-	   comp.Insert("PUSH", 6)
-	   comp.Insert("PUSH", 101)
-	   comp.Insert("PUSH", 10)
-	   comp.Insert("CALL", 50)
-	   comp.Insert("STOP", 0)
-	   comp.SetAddress(0)
-	   comp.Execute()
-	*/
+	log.Fatal(http.ListenAndServe(":8080", router))
 }
