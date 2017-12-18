@@ -9,11 +9,17 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 )
+
+type MuxComputer struct {
+    comp computer.Computer
+    mux sync.Mutex
+}
 
 // App variables
 var computer_count = 0
-var computers []computer.Computer
+var computers []MuxComputer
 
 func parseBody(r *http.Request, t interface{}) error {
 	body, err := ioutil.ReadAll(r.Body)
@@ -47,7 +53,8 @@ func createComputer(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	}
 
 	comp := computer.New(100)
-	computers = append(computers, comp)
+    muxComp := MuxComputer{comp: comp}
+	computers = append(computers, muxComp)
 	fmt.Fprintf(w, "%d\n", computer_count)
 	computer_count += 1
 }
@@ -75,8 +82,10 @@ func setAddress(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	defer r.Body.Close()
 	if id < len(computers) {
-		comp := &computers[id]
-		comp.SetAddress(args.Addr)
+		c := &computers[id]
+        c.mux.Lock()
+		c.comp.SetAddress(args.Addr)
+        c.mux.Unlock()
 	} else {
 		http.Error(w, "Computer not existant", http.StatusInternalServerError)
 	}
@@ -107,8 +116,10 @@ func insert(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	defer r.Body.Close()
 
 	if id < len(computers) {
-		comp := &computers[id]
-		comp.Insert(ins, args.Arg)
+		c := &computers[id]
+        c.mux.Lock()
+		c.comp.Insert(ins, args.Arg)
+        c.mux.Unlock()
 	} else {
 		http.Error(w, "Computer not existant", http.StatusInternalServerError)
 	}
@@ -124,8 +135,10 @@ func execute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	}
 
 	if id < len(computers) {
-		comp := &computers[id]
-		ret, err := comp.Execute()
+		c := &computers[id]
+        c.mux.Lock()
+		ret, err := c.comp.Execute()
+        c.mux.Unlock()
 		if err == nil {
 			fmt.Fprintf(w, ret)
 		} else {
